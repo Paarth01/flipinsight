@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlipInsight — Flipkart Product Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #131822;
+    --panel-border: #232a38;
+    --accent: #5b8cff;
+    --accent-2: #ffb84d;
+    --text: #e8ebf2;
+    --text-dim: #8b93a7;
+    --good: #4fd1a5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 32px 60px;
+  }
+  header { margin-bottom: 28px; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  header p { color: var(--text-dim); margin: 0; font-size: 14px; }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat-card .value { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .stat-card .label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 14px; font-weight: 600; color: var(--text); }
+  canvas { max-height: 280px; }
+
+  .predict-panel { grid-column: 1 / -1; }
+  .predict-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .predict-forms { grid-template-columns: 1fr; } }
+
+  label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  input, textarea, select {
+    width: 100%;
+    background: #0e131c;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  button {
+    margin-top: 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .result-box {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #0e131c;
+    border-radius: 8px;
+    font-size: 13px;
+    min-height: 20px;
+    border: 1px solid var(--panel-border);
+  }
+  .result-box .big { font-size: 20px; font-weight: 700; color: var(--good); }
+  .loading { color: var(--text-dim); font-style: italic; }
+
+  .rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .rec-card {
+    background: #0e131c;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .rec-name { font-size: 13px; font-weight: 600; margin-bottom: 6px; line-height: 1.3; }
+  .rec-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+  .rec-price { font-size: 14px; font-weight: 700; color: var(--accent-2); }
+  .rec-sim { font-size: 11px; color: var(--good); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FlipInsight</h1>
+  <p>Product analytics and ML inference over 20,000 Flipkart e-commerce listings</p>
+</header>
+
+<div class="stats-row" id="stats-row">
+  <div class="stat-card"><div class="value">—</div><div class="label">Loading...</div></div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Top Categories by Product Count</h2>
+    <canvas id="categoryChart"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Average Price by Category</h2>
+    <canvas id="priceChart"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Discount % Distribution</h2>
+    <canvas id="discountChart"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Top Brands by Listing Count</h2>
+    <canvas id="brandChart"></canvas>
+  </div>
+</div>
+
+<div class="panel predict-panel">
+  <h2>Live ML Predictions</h2>
+  <div class="predict-forms">
+    <div>
+      <h3 style="font-size:13px; color:var(--accent-2); margin-bottom:0;">Predict Retail Price</h3>
+      <label>Category (L1)</label>
+      <input id="price-category" placeholder="Clothing" value="Clothing">
+      <label>Category (L2, optional)</label>
+      <input id="price-category2" placeholder="Women's Clothing">
+      <label>Brand (optional)</label>
+      <input id="price-brand" placeholder="Nike">
+      <label>Description</label>
+      <textarea id="price-description">Cotton casual t-shirt for men, regular fit, machine washable</textarea>
+      <button onclick="predictPrice()">Predict Price</button>
+      <div class="result-box" id="price-result">Result will appear here</div>
+    </div>
+    <div>
+      <h3 style="font-size:13px; color:var(--accent-2); margin-bottom:0;">Predict Category from Description</h3>
+      <label>Product Description</label>
+      <textarea id="cat-description" style="min-height:120px;">Men's running shoes with breathable mesh upper and cushioned rubber sole, lightweight and durable for daily training</textarea>
+      <button onclick="predictCategory()">Predict Category</button>
+      <div class="result-box" id="cat-result">Result will appear here</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel predict-panel">
+  <h2>Find Similar Products</h2>
+  <label>Describe what you're looking for</label>
+  <textarea id="rec-query" style="min-height:60px;">waterproof running shoes for men</textarea>
+  <button onclick="searchSimilar()">Search</button>
+  <div id="rec-results" style="margin-top:14px;"></div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let charts = {};
+
+async function fetchJSON(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error("Request failed: " + path);
+  return res.json();
+}
+
+function chartColors(n) {
+  const palette = ["#5b8cff", "#ffb84d", "#4fd1a5", "#ff6b8b", "#c792ea", "#7ee787", "#f78166", "#79c0ff"];
+  return Array.from({length: n}, (_, i) => palette[i % palette.length]);
+}
+
+async function loadStats() {
+  const s = await fetchJSON("/analytics/summary");
+  const row = document.getElementById("stats-row");
+  row.innerHTML = `
+    <div class="stat-card"><div class="value">${s.total_products.toLocaleString()}</div><div class="label">Total Products</div></div>
+    <div class="stat-card"><div class="value">${s.total_brands.toLocaleString()}</div><div class="label">Unique Brands</div></div>
+    <div class="stat-card"><div class="value">${s.total_categories}</div><div class="label">Top-Level Categories</div></div>
+    <div class="stat-card"><div class="value">Rs. ${s.avg_retail_price.toLocaleString()}</div><div class="label">Avg Retail Price</div></div>
+    <div class="stat-card"><div class="value">${s.avg_discount_pct}%</div><div class="label">Avg Discount</div></div>
+    <div class="stat-card"><div class="value">${s.pct_with_rating}%</div><div class="label">Products with Rating</div></div>
+  `;
+}
+
+async function loadCategoryChart() {
+  const data = await fetchJSON("/analytics/categories?limit=10");
+  const ctx = document.getElementById("categoryChart");
+  charts.category = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.category),
+      datasets: [{ label: "Products", data: data.map(d => d.count), backgroundColor: "#5b8cff" }]
+    },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#8b93a7" } }, y: { ticks: { color: "#8b93a7" } } }
+    }
+  });
+}
+
+async function loadPriceChart() {
+  const data = await fetchJSON("/analytics/price-by-category?limit=10");
+  const ctx = document.getElementById("priceChart");
+  charts.price = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.category),
+      datasets: [{ label: "Avg Retail Price (Rs.)", data: data.map(d => d.avg_retail_price), backgroundColor: "#ffb84d" }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#8b93a7", maxRotation: 60, minRotation: 45 } }, y: { ticks: { color: "#8b93a7" } } }
+    }
+  });
+}
+
+async function loadDiscountChart() {
+  const data = await fetchJSON("/analytics/discount-distribution");
+  const ctx = document.getElementById("discountChart");
+  charts.discount = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.range),
+      datasets: [{ label: "Products", data: data.map(d => d.count), backgroundColor: "#4fd1a5" }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#8b93a7" } }, y: { ticks: { color: "#8b93a7" } } }
+    }
+  });
+}
+
+async function loadBrandChart() {
+  const data = await fetchJSON("/analytics/top-brands?limit=10");
+  const ctx = document.getElementById("brandChart");
+  charts.brand = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: data.map(d => d.brand),
+      datasets: [{ data: data.map(d => d.product_count), backgroundColor: chartColors(data.length) }]
+    },
+    options: {
+      plugins: { legend: { position: "right", labels: { color: "#8b93a7", boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+async function predictPrice() {
+  const resultBox = document.getElementById("price-result");
+  resultBox.innerHTML = '<span class="loading">Predicting...</span>';
+  try {
+    const res = await fetch(API_BASE + "/predict/price", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category_l1: document.getElementById("price-category").value,
+        category_l2: document.getElementById("price-category2").value || null,
+        brand: document.getElementById("price-brand").value || null,
+        description: document.getElementById("price-description").value,
+        is_FK_Advantage_product: false
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Prediction failed");
+    resultBox.innerHTML = `Predicted Retail Price: <span class="big">Rs. ${data.predicted_retail_price.toLocaleString()}</span>`;
+  } catch (e) {
+    resultBox.innerHTML = `<span style="color:#ff6b8b">${e.message}</span>`;
+  }
+}
+
+async function predictCategory() {
+  const resultBox = document.getElementById("cat-result");
+  resultBox.innerHTML = '<span class="loading">Predicting...</span>';
+  try {
+    const res = await fetch(API_BASE + "/predict/category", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: document.getElementById("cat-description").value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Prediction failed");
+    const topList = data.top_3.map(t => `${t.category} (${(t.confidence * 100).toFixed(1)}%)`).join(", ");
+    resultBox.innerHTML = `Predicted Category: <span class="big">${data.predicted_category}</span><br><span style="color:#8b93a7">Top 3: ${topList}</span>`;
+  } catch (e) {
+    resultBox.innerHTML = `<span style="color:#ff6b8b">${e.message}</span>`;
+  }
+}
+
+async function searchSimilar() {
+  const box = document.getElementById("rec-results");
+  box.innerHTML = '<span class="loading">Searching...</span>';
+  try {
+    const res = await fetch(API_BASE + "/recommend/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: document.getElementById("rec-query").value, k: 6 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Search failed");
+    if (data.results.length === 0) {
+      box.innerHTML = '<span class="loading">No matches found</span>';
+      return;
+    }
+    box.innerHTML = '<div class="rec-grid">' + data.results.map(r => `
+      <div class="rec-card">
+        <div class="rec-name">${r.product_name}</div>
+        <div class="rec-meta">${r.category_l1 || "—"} ${r.brand ? "· " + r.brand : ""}</div>
+        <div class="rec-price">Rs. ${r.discounted_price ? r.discounted_price.toLocaleString() : (r.retail_price || 0).toLocaleString()}</div>
+        <div class="rec-sim">${(r.similarity * 100).toFixed(0)}% match</div>
+      </div>
+    `).join("") + '</div>';
+  } catch (e) {
+    box.innerHTML = `<span style="color:#ff6b8b">${e.message}</span>`;
+  }
+}
+
+async function init() {
+  await Promise.all([loadStats(), loadCategoryChart(), loadPriceChart(), loadDiscountChart(), loadBrandChart()]);
+  searchSimilar();
+}
+init();
+</script>
+</body>
+</html>

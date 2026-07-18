@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ETL
+        run: python3 etl/clean.py
+
+      - name: Load database
+        run: python3 -m db.init_db
+
+      - name: Train price prediction model
+        run: python3 -m ml.train_price_model
+
+      - name: Train category classification model
+        run: python3 -m ml.train_category_model
+
+      - name: Train recommender
+        run: python3 -m ml.train_recommender
+
+      - name: Run tests
+        run: python3 -m pytest tests/ -v
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t flipinsight:ci .
+
+      - name: Smoke-test container
+        run: |
+          docker run -d -p 8000:8000 --name flipinsight-smoke flipinsight:ci
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8000/health; then
+              echo "Container healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container failed to become healthy"
+          docker logs flipinsight-smoke
+          exit 1

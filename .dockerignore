@@ -1,0 +1,11 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+*.egg-info/
+.DS_Store
+README.md
+data/processed/flipinsight.db
+ml/models/*.joblib
