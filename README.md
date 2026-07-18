@@ -1,6 +1,8 @@
 # FlipInsight — Flipkart Product Analytics Platform
 
-An end-to-end data analytics platform built on the [Flipkart e-commerce sample dataset](https://www.kaggle.com/datasets/PromptCloudHQ/flipkart-products) (20,000 product listings). Covers the full pipeline: **ETL → relational DB → ML models → REST API → live dashboard**.
+[![CI](https://github.com/Paarth01/flipinsight/actions/workflows/ci.yml/badge.svg)](https://github.com/Paarth01/flipinsight/actions/workflows/ci.yml)
+
+An end-to-end data analytics platform built on the [Flipkart e-commerce sample dataset](https://www.kaggle.com/datasets/PromptCloudHQ/flipkart-products) (20,000 product listings). Covers the full pipeline: **ETL → PostgreSQL → ML models → REST API → live dashboard**.
 
 ## Architecture
 
@@ -16,9 +18,9 @@ Raw CSV (20,000 rows, messy nested/stringified fields)
         ▼
    db/init_db.py          — loads into SQLite via SQLAlchemy ORM
         │
-        ├──► ml/train_price_model.py     — RandomForest price regressor (R² 0.77)
-        ├──► ml/train_category_model.py  — TF-IDF + LogReg category classifier (98.2% acc)
-        ├──► ml/train_recommender.py     — TF-IDF + cosine similarity recommender
+         ├──► ml/train_price_model.py     — RandomForest price regressor (R² 0.77)
+         ├──► ml/train_category_model.py  — TF-IDF + LogReg category classifier (98.2% acc)
+         ├──► ml/train_recommender.py     — sentence-transformers (MiniLM-L6) semantic recommender
         │
         ▼
    api/main.py (FastAPI)  — REST endpoints for products, analytics, ML inference
@@ -65,7 +67,7 @@ Then open **http://localhost:8000** for the dashboard, or **http://localhost:800
 docker compose up --build
 ```
 
-The image bakes in the full pipeline at build time (ETL → DB → all 3 trained models), so the container starts serving immediately — no first-request warm-up. Dashboard at **http://localhost:8000**.
+The image runs the ETL + ML training at **build time**. The database is seeded at **startup** via the lifespan hook — so it works with Railway, Render, or any managed PostgreSQL provider. Dashboard at **http://localhost:8000**.
 
 To run with plain Docker instead of Compose:
 
@@ -84,7 +86,7 @@ pip install psycopg2-binary
 python3 -m db.init_db
 ```
 
-`docker-compose.yml` has a commented-out Postgres service ready to uncomment.
+`docker-compose.yml` includes a PostgreSQL 16 service wired to the API via `DATABASE_URL`.
 
 ## CI
 
@@ -122,14 +124,17 @@ python3 -m pytest tests/ -v
 
 - **Price prediction** (RandomForest, log-target): MAE ≈ Rs. 1,056, R² ≈ 0.77 on held-out test set
 - **Category classification** (TF-IDF + LogisticRegression, 25 classes): 98.2% test accuracy
-- **Recommender** (TF-IDF + cosine similarity): content-based, neighbor tables precomputed at train time for O(1) lookups by product ID; free-text queries computed on demand
+- **Price prediction** (RandomForest, log-target): MAE ≈ Rs. 1,056, R² ≈ 0.77 on held-out test set
+- **Category classification** (TF-IDF + LogisticRegression, 25 classes): 98.2% test accuracy
+- **Recommender** (sentence-transformers MiniLM-L6-v2): dense semantic embeddings, cosine similarity search; free-text queries and product-ID lookups both supported
 
 ## Tech stack
 
-Python · pandas · scikit-learn · FastAPI · SQLAlchemy · SQLite (Postgres-ready) · Docker · GitHub Actions · Chart.js · pytest
+Python · pandas · scikit-learn · sentence-transformers · FastAPI · SQLAlchemy · PostgreSQL · Docker · GitHub Actions · Chart.js · pytest
 
 ## Possible extensions
 
 - Add a `/recommend` embedding-based upgrade using sentence-transformers instead of TF-IDF
-- Add request-level auth / rate limiting if ever exposed publicly
 - Add a `/models/retrain` endpoint to trigger retraining without redeploying
+- Add JWT-based user authentication with per-key usage tracking
+- Deploy permanently to Koyeb or Fly.io for a fixed public URL
