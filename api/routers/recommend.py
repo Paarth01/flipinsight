@@ -11,11 +11,31 @@ from api.schemas import RecommendBySearchRequest, RecommendResponse, SimilarProd
 from db.models import Product, get_db
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/recommend", tags=["recommend"])
+from api.security import verify_api_key, RateLimiter
+
+router = APIRouter(
+    prefix="/recommend",
+    tags=["recommend"],
+    dependencies=[Depends(verify_api_key), Depends(RateLimiter(requests=10, window_seconds=60))]
+)
 
 MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "ml" / "models" / "recommender.joblib"
 
 _artifact = None
+_model = None
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        import torch
+        # Avoid thread contention in multi-worker deployment
+        torch.set_num_threads(1)
+        from sentence_transformers import SentenceTransformer
+        logger.info("Loading SentenceTransformer model for query encoding...")
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        _model.max_seq_length = 128
+    return _model
 
 
 def _get_artifact():
@@ -79,11 +99,11 @@ def similar_to_product(uniq_id: str, k: int = Query(10, ge=1, le=25), db: Sessio
 @router.post("/search", response_model=RecommendResponse)
 def similar_by_text(payload: RecommendBySearchRequest, db: Session = Depends(get_db)):
     artifact = _get_artifact()
-    vectorizer = artifact["vectorizer"]
     nn_index = artifact["nn_index"]
     uniq_ids = artifact["uniq_ids"]
 
-    query_vec = vectorizer.transform([payload.query])
+    model = _get_model()
+    query_vec = model.encode([payload.query])
     n_neighbors = min(payload.k, len(uniq_ids))
     distances, indices = nn_index.kneighbors(query_vec, n_neighbors=n_neighbors)
 

@@ -279,7 +279,10 @@ async function predictPrice() {
   try {
     const res = await fetch(API_BASE + "/predict/price", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-API-Key": "dev-secret-key"
+      },
       body: JSON.stringify({
         category_l1: document.getElementById("price-category").value,
         category_l2: document.getElementById("price-category2").value || null,
@@ -302,7 +305,10 @@ async function predictCategory() {
   try {
     const res = await fetch(API_BASE + "/predict/category", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-API-Key": "dev-secret-key"
+      },
       body: JSON.stringify({ description: document.getElementById("cat-description").value })
     });
     const data = await res.json();
@@ -320,7 +326,10 @@ async function searchSimilar() {
   try {
     const res = await fetch(API_BASE + "/recommend/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-API-Key": "dev-secret-key"
+      },
       body: JSON.stringify({ query: document.getElementById("rec-query").value, k: 6 })
     });
     const data = await res.json();

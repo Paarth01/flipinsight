@@ -6,7 +6,8 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from api.security import verify_api_key, RateLimiter
 
 from api.schemas import (
     CategoryPredictionRequest,
@@ -16,7 +17,11 @@ from api.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/predict", tags=["ml"])
+router = APIRouter(
+    prefix="/predict",
+    tags=["ml"],
+    dependencies=[Depends(verify_api_key), Depends(RateLimiter(requests=5, window_seconds=60))]
+)
 
 MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "ml" / "models"
 

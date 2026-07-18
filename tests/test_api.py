@@ -102,7 +102,7 @@ def test_predict_price():
         "brand": "Alisha",
         "description": "Cotton casual shorts for women, comfortable fit",
         "is_FK_Advantage_product": False,
-    })
+    }, headers={"X-API-Key": "dev-secret-key"})
     assert r.status_code == 200
     data = r.json()
     assert data["predicted_retail_price"] > 0
@@ -111,7 +111,7 @@ def test_predict_price():
 def test_predict_category():
     r = client.post("/predict/category", json={
         "description": "Men's running shoes with breathable mesh upper and cushioned sole"
-    })
+    }, headers={"X-API-Key": "dev-secret-key"})
     assert r.status_code == 200
     data = r.json()
     assert "predicted_category" in data
@@ -119,5 +119,38 @@ def test_predict_category():
 
 
 def test_predict_price_missing_required_field():
-    r = client.post("/predict/price", json={"description": "test"})
+    r = client.post("/predict/price", json={"description": "test"}, headers={"X-API-Key": "dev-secret-key"})
     assert r.status_code == 422
+
+
+def test_predict_unauthorized_no_key():
+    r = client.post("/predict/price", json={"description": "test"})
+    assert r.status_code == 401
+
+
+def test_predict_unauthorized_bad_key():
+    r = client.post("/predict/price", json={"description": "test"}, headers={"X-API-Key": "bad-key"})
+    assert r.status_code == 401
+
+
+def test_predict_rate_limiter():
+    # Make multiple requests to trigger 429
+    # Predict router allows 5 requests per 60 seconds.
+    # The first 5 requests (including the successful test_predict_price/test_predict_price_missing_required_field above)
+    # might have consumed some quota. To be safe and deterministic, let's clear the history or just flood it.
+    from api.security import _request_history
+    _request_history.clear()
+
+    for _ in range(5):
+        r = client.post("/predict/price", json={
+            "category_l1": "Clothing",
+            "description": "test"
+        }, headers={"X-API-Key": "dev-secret-key"})
+        assert r.status_code in (200, 422)  # missing category_l2/brand is fine, might return 200 or 422 depending on schema
+    
+    # The 6th request must be rate limited
+    r = client.post("/predict/price", json={
+        "category_l1": "Clothing",
+        "description": "test"
+    }, headers={"X-API-Key": "dev-secret-key"})
+    assert r.status_code == 429

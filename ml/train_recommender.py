@@ -17,7 +17,7 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sentence_transformers import SentenceTransformer
 from sklearn.neighbors import NearestNeighbors
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -30,33 +30,41 @@ MAX_NEIGHBORS = 25  # precompute enough neighbors to serve any k <= this at quer
 
 
 def train(data_path: Path = DATA_PATH, model_path: Path = MODEL_PATH) -> dict:
+    import torch
+    # Limit CPU thread contention which slows down PyTorch on many-core processors
+    torch.set_num_threads(4)
+    
     logger.info("Loading data from %s", data_path)
     df = pd.read_csv(data_path)
     df = df.dropna(subset=["uniq_id"])
     df["description"] = df["description"].fillna("")
     df["product_name"] = df["product_name"].fillna("")
 
-    # Weight the product name more heavily than description by repeating it —
-    # cheap trick that noticeably improves relevance for short-name matches.
-    text = (df["product_name"] + " ") * 3 + df["description"]
+    # Truncate description and combine with name to keep sequence lengths small
+    text = df["product_name"] + " " + df["description"].str.slice(0, 300)
 
-    vectorizer = TfidfVectorizer(max_features=30000, ngram_range=(1, 2), min_df=2, stop_words="english")
-    matrix = vectorizer.fit_transform(text)
-    logger.info("TF-IDF matrix shape: %s", matrix.shape)
+    logger.info("Loading sentence-transformers model...")
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    # Limit max sequence length to 128 tokens to speed up self-attention and reduce padding overhead
+    model.max_seq_length = 128
+    
+    logger.info("Generating embeddings for %d products...", len(df))
+    embeddings = model.encode(text.tolist(), show_progress_bar=True, batch_size=256)
+    logger.info("Embeddings shape: %s", embeddings.shape)
 
-    n_neighbors = min(MAX_NEIGHBORS + 1, matrix.shape[0])  # +1 because a product is its own nearest neighbor
+    n_neighbors = min(MAX_NEIGHBORS + 1, embeddings.shape[0])  # +1 because a product is its own nearest neighbor
     nn_index = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine", algorithm="brute")
-    nn_index.fit(matrix)
+    nn_index.fit(embeddings)
     logger.info("Fitted NearestNeighbors with n_neighbors=%d", n_neighbors)
 
     # Precompute neighbors for every existing product so "similar to product X"
     # lookups are an O(1) array index at request time instead of re-running
     # kneighbors over the full matrix on every API call.
-    logger.info("Precomputing neighbor table for all %d products...", matrix.shape[0])
-    distances, indices = nn_index.kneighbors(matrix, n_neighbors=n_neighbors)
+    logger.info("Precomputing neighbor table for all %d products...", embeddings.shape[0])
+    distances, indices = nn_index.kneighbors(embeddings, n_neighbors=n_neighbors)
 
     artifact = {
-        "vectorizer": vectorizer,
+        "embeddings": embeddings,
         "nn_index": nn_index,
         "uniq_ids": df["uniq_id"].tolist(),
         "precomputed_distances": distances,
@@ -66,7 +74,7 @@ def train(data_path: Path = DATA_PATH, model_path: Path = MODEL_PATH) -> dict:
     joblib.dump(artifact, model_path)
     logger.info("Saved recommender artifact to %s", model_path)
 
-    return {"n_products": matrix.shape[0], "vocab_size": len(vectorizer.vocabulary_)}
+    return {"n_products": embeddings.shape[0], "embedding_dim": embeddings.shape[1]}
 
 
 if __name__ == "__main__":
