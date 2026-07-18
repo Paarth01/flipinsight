@@ -10,6 +10,9 @@ services:
       - FLIPINSIGHT_API_KEY=dev-secret-key
     depends_on:
       - db
+    volumes:
+      # Mount dashboard dir so HTML/CSS/JS changes are live without rebuild
+      - ./dashboard/static:/app/dashboard/static:ro
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
