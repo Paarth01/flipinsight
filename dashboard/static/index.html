@@ -199,13 +199,16 @@ function chartColors(n) {
 async function loadStats() {
   const s = await fetchJSON("/analytics/summary");
   const row = document.getElementById("stats-row");
+  const avgRetailPriceText = s.avg_retail_price != null ? "Rs. " + Math.round(s.avg_retail_price).toLocaleString() : "N/A";
+  const avgDiscountText = s.avg_discount_pct != null ? Math.round(s.avg_discount_pct) + "%" : "0%";
+  const pctWithRatingText = s.pct_with_rating != null ? Math.round(s.pct_with_rating) + "%" : "0%";
   row.innerHTML = `
-    <div class="stat-card"><div class="value">${s.total_products.toLocaleString()}</div><div class="label">Total Products</div></div>
-    <div class="stat-card"><div class="value">${s.total_brands.toLocaleString()}</div><div class="label">Unique Brands</div></div>
-    <div class="stat-card"><div class="value">${s.total_categories}</div><div class="label">Top-Level Categories</div></div>
-    <div class="stat-card"><div class="value">Rs. ${s.avg_retail_price.toLocaleString()}</div><div class="label">Avg Retail Price</div></div>
-    <div class="stat-card"><div class="value">${s.avg_discount_pct}%</div><div class="label">Avg Discount</div></div>
-    <div class="stat-card"><div class="value">${s.pct_with_rating}%</div><div class="label">Products with Rating</div></div>
+    <div class="stat-card"><div class="value">${(s.total_products || 0).toLocaleString()}</div><div class="label">Total Products</div></div>
+    <div class="stat-card"><div class="value">${(s.total_brands || 0).toLocaleString()}</div><div class="label">Unique Brands</div></div>
+    <div class="stat-card"><div class="value">${s.total_categories || 0}</div><div class="label">Top-Level Categories</div></div>
+    <div class="stat-card"><div class="value">${avgRetailPriceText}</div><div class="label">Avg Retail Price</div></div>
+    <div class="stat-card"><div class="value">${avgDiscountText}</div><div class="label">Avg Discount</div></div>
+    <div class="stat-card"><div class="value">${pctWithRatingText}</div><div class="label">Products with Rating</div></div>
   `;
 }
 

@@ -5,6 +5,11 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://flipinsight:flipinsight@db:5432/flipinsight
+      - FLIPINSIGHT_API_KEY=dev-secret-key
+    depends_on:
+      - db
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -12,19 +17,17 @@ services:
       retries: 3
       start_period: 10s
 
-  # Uncomment to switch from SQLite to Postgres. If you do, update
-  # DATABASE_URL in db/models.py (or read it from an env var) to point here.
-  # db:
-  #   image: postgres:16-alpine
-  #   container_name: flipinsight-db
-  #   environment:
-  #     POSTGRES_USER: flipinsight
-  #     POSTGRES_PASSWORD: flipinsight
-  #     POSTGRES_DB: flipinsight
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - flipinsight_pgdata:/var/lib/postgresql/data
+  db:
+    image: postgres:16-alpine
+    container_name: flipinsight-db
+    environment:
+      - POSTGRES_USER=flipinsight
+      - POSTGRES_PASSWORD=flipinsight
+      - POSTGRES_DB=flipinsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - flipinsight_pgdata:/var/lib/postgresql/data
 
-# volumes:
-#   flipinsight_pgdata:
+volumes:
+  flipinsight_pgdata:
