@@ -1,0 +1,23 @@
+# render.yaml — Render Blueprint for FlipInsight
+# Defines: API web service (Docker) + PostgreSQL 16 database
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: flipinsight-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: flipinsight-db
+          property: connectionString
+      - key: FLIPINSIGHT_API_KEY
+        generateValue: true   # Render auto-generates a secure random value; you can override it
+
+databases:
+  - name: flipinsight-db
+    databaseName: flipinsight
+    user: flipinsight
+    plan: free
