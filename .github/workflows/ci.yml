@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    name: Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -39,9 +40,12 @@ jobs:
         run: python3 -m ml.train_recommender
 
       - name: Run tests
-        run: python3 -m pytest tests/ -v
+        env:
+          FLIPINSIGHT_API_KEY: dev-secret-key
+        run: python3 -m pytest tests/ -v --tb=short
 
   docker-build:
+    name: Docker Build & Smoke Test
     runs-on: ubuntu-latest
     needs: test
 
